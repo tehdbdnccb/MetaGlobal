@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import { CalibratedMetrologyReport } from "./rleMetrologyKernel";
 import { EpistemicAuditVerdict, SeparatedGlimmerChannels } from "./epistemicFirewall";
@@ -55,13 +55,18 @@ export class WonderInvariantValidator {
     rawJsonText: string,
     serializedPromptPayload: string
   ): WonderArbitrationVerdict {
-    let parsed: Record<string, unknown>;
+    let rawParsed: unknown;
     try {
-      parsed = JSON.parse(rawJsonText) as Record<string, unknown>;
+      rawParsed = JSON.parse(rawJsonText);
     } catch {
       throw new Error("Muse Wonder 1.0 schema violation: output is not valid JSON.");
     }
 
+    if (typeof rawParsed !== "object" || rawParsed === null || Array.isArray(rawParsed)) {
+      throw new Error("Muse Wonder 1.0 schema violation: root value must be a JSON object.");
+    }
+
+    const parsed = rawParsed as Record<string, unknown>;
     const approved = parsed.approvedForExecution;
     const reconciledValueMm2 = parsed.reconciledValueMm2;
     const confidenceScore = parsed.confidenceScore;
@@ -70,11 +75,16 @@ export class WonderInvariantValidator {
     if (typeof approved !== "boolean") {
       throw new Error("Schema violation: approvedForExecution must be boolean.");
     }
-    if (typeof reconciledValueMm2 !== "number" || !Number.isFinite(reconciledValueMm2) || reconciledValueMm2 < 0) {
+    if (
+      typeof reconciledValueMm2 !== "number" ||
+      !Number.isFinite(reconciledValueMm2) ||
+      reconciledValueMm2 < 0
+    ) {
       throw new Error("Schema violation: reconciledValueMm2 must be a non-negative finite number.");
     }
     if (
       typeof confidenceScore !== "number" ||
+      !Number.isFinite(confidenceScore) ||
       confidenceScore < 0 ||
       confidenceScore > 1
     ) {

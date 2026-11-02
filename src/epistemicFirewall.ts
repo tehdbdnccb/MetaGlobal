@@ -40,7 +40,7 @@ export class GlimmerTraceParser {
   }
 
   public extractNumericVector(text: string): readonly number[] {
-    const matches = text.match(/-?\d+(?:\.\d+)?/g);
+    const matches = text.match(/(?<![A-Za-z0-9])-?\d+(?:\.\d+)?/g);
     if (!matches) {
       return [];
     }

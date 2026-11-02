@@ -171,14 +171,21 @@ export class GlimmerEdgeEndpointGuard {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       throw new Error("Local vLLM endpoint must use HTTP or HTTPS transport.");
     }
+    if (parsed.username.length > 0 || parsed.password.length > 0) {
+      throw new Error("Local vLLM endpoint must not contain embedded credentials.");
+    }
 
     const host = parsed.hostname.toLowerCase();
-    const allowedLocalPrefixes = ["localhost", "127.0.0.1", "::1", "10.", "192.168."];
     const allowedPrivateSuffixes = [".railway.internal", ".trycloudflare.com"];
 
-    const isLocalLoopback = allowedLocalPrefixes.some(
-      (prefix) => host === prefix || host.startsWith(prefix)
-    );
+    const isLocalLoopback =
+      host === "localhost" ||
+      host === "[::1]" ||
+      host === "::1" ||
+      /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^192\.168\.\d{1,3}\.\d{1,3}$/.test(host) ||
+      /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(host);
     const isAuthorizedTunnel =
       allowedPrivateSuffixes.some((suffix) => host.endsWith(suffix)) &&
       (host.endsWith(".railway.internal") || parsed.protocol === "https:");

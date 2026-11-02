@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import {
   VolumetricMetrologyReport,
   VolumetricSafetyVerdict,
@@ -168,19 +168,30 @@ export class AutonomousSelfHealingOrchestrator {
 
     const formalAgent: AgentStateVector = {
       agentId: "muse-wonder-1.0-formal",
-      measuredVolumeMl: wonderVerdict?.reconciledValueMm2
-        ? wonderVerdict.reconciledValueMm2 / 1000
-        : volumetricReport.calibratedVolumeMl,
+      measuredVolumeMl:
+        wonderVerdict !== null
+          ? wonderVerdict.reconciledValueMm2 / 1000
+          : volumetricReport.calibratedVolumeMl,
       radialKappa: volumetricReport.radialDistortionIndexKappa,
-      isSafe: wonderVerdict
-        ? wonderVerdict.approvedForExecution
-        : safetyVerdict.isSafeToAdminister,
-      confidenceScore: wonderVerdict ? wonderVerdict.confidenceScore : 0.90,
+      isSafe:
+        wonderVerdict !== null
+          ? wonderVerdict.approvedForExecution
+          : safetyVerdict.isSafeToAdminister,
+      confidenceScore: wonderVerdict !== null ? wonderVerdict.confidenceScore : 0.90,
     };
 
     const states = [localAgent, cloudAgent, formalAgent];
     const { agrees, medianVolume, medianKappa } =
       this.validator.evaluateQuorumAgreement(states, 0.05);
+
+    const requiredQuorum = Math.ceil((2 * states.length + 1) / 3);
+    const safeVoteCount = states.filter((s) => s.isSafe).length;
+    const wonderPermits = wonderVerdict === null || wonderVerdict.approvedForExecution;
+    const consensusIsSafe =
+      agrees &&
+      safetyVerdict.isSafeToAdminister &&
+      wonderPermits &&
+      safeVoteCount >= requiredQuorum;
 
     const proofHash = this.validator.generateConsensusProof(
       sessionId,
@@ -196,7 +207,7 @@ export class AutonomousSelfHealingOrchestrator {
       activeAgentCount: states.length,
       consensusVolumeMl: medianVolume,
       consensusKappa: medianKappa,
-      consensusIsSafe: safetyVerdict.isSafeToAdminister && agrees,
+      consensusIsSafe,
       frameIndex: chainContext.frameIndex,
       parentProofHash: chainContext.previousFrameProofHash,
       cryptographicProofHash: proofHash,

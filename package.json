@@ -5,10 +5,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "tsx src/server.ts",
+    "start": "tsx --env-file-if-exists=.env src/server.ts",
     "dev": "vite",
     "build": "vite build",
-    "test": "bun test src/vpseVerification.test.ts",
+    "test": "tsx --test src/vpseVerification.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

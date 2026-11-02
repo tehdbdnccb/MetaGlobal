@@ -161,11 +161,25 @@ export class MuseSparkExecutor {
       throw new Error("Muse Spark 1.3 failed to emit required deterministic tool call.");
     }
 
-    const args = JSON.parse(toolCall.function.arguments) as {
-      readonly clickX: number;
-      readonly clickY: number;
-      readonly verifiedPayloadString: string;
-    };
+    let rawArgs: unknown;
+    try {
+      rawArgs = JSON.parse(toolCall.function.arguments);
+    } catch {
+      throw new Error("Muse Spark 1.3 emitted malformed JSON tool arguments.");
+    }
+    if (typeof rawArgs !== "object" || rawArgs === null || Array.isArray(rawArgs)) {
+      throw new Error("Muse Spark 1.3 tool arguments must be a JSON object.");
+    }
+
+    const args = rawArgs as Record<string, unknown>;
+    if (
+      typeof args.clickX !== "number" ||
+      typeof args.clickY !== "number" ||
+      typeof args.verifiedPayloadString !== "string" ||
+      args.verifiedPayloadString.trim().length === 0
+    ) {
+      throw new Error("Muse Spark 1.3 tool arguments violated required schema types.");
+    }
 
     const verifiedCoords = this.guard.sanitizeCoordinateBounds(
       args.clickX,

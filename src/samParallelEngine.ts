@@ -45,10 +45,28 @@ export class SamWireExtractor {
     if (parsed.protocol !== "https:") {
       throw new Error("Security invariant violation: media URL must use HTTPS.");
     }
+    if (parsed.username.length > 0 || parsed.password.length > 0) {
+      throw new Error("Security invariant violation: embedded URL credentials disallowed.");
+    }
 
     const host = parsed.hostname.toLowerCase();
-    const blockedPrefixes = ["localhost", "127.", "10.", "169.254.", "192.168.", "0."];
-    if (blockedPrefixes.some((prefix) => host.startsWith(prefix))) {
+    const isPrivateIpv4 =
+      host.startsWith("127.") ||
+      host.startsWith("10.") ||
+      host.startsWith("169.254.") ||
+      host.startsWith("192.168.") ||
+      host.startsWith("0.") ||
+      /^172\.(1[6-9]|2\d|3[01])\./.test(host) ||
+      /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(host);
+    const isPrivateIpv6 =
+      /^\[(::1|::|fe[89ab][0-9a-f]:|fc[0-9a-f]{2}:|fd[0-9a-f]{2}:|::ffff:)/.test(host);
+    const isInternalHostname =
+      host === "localhost" ||
+      host.endsWith(".localhost") ||
+      host.endsWith(".local") ||
+      host.endsWith(".internal");
+
+    if (isPrivateIpv4 || isPrivateIpv6 || isInternalHostname) {
       throw new Error(`SSRF protection triggered: disallowed host ${host}.`);
     }
 
@@ -132,7 +150,10 @@ export class SamParallelDispatcher {
 
     // Deterministic RLE wire generator for built-in clinical benchmark scenarios
     if (safeUrl.includes("/sim-")) {
-      const frameWidth = 640;
+      const frameWidth =
+        totalFramePixels >= 640 * 305
+          ? 640
+          : Math.max(320, Math.floor(Math.sqrt(totalFramePixels)));
       const runs: number[] = [];
       let cursor = 0;
 
@@ -155,19 +176,30 @@ export class SamParallelDispatcher {
           cursor = startPx + 176;
         }
       } else {
-        // Syringe meniscus column based on scenario URL
+        // Syringe meniscus column calibrated to pediatric precision barrel bore (11px optical chord, ~58px/mL)
+        const isAdulterated = safeUrl.includes("sim-adulterated");
         const rowCount = safeUrl.includes("sim-nominal")
-          ? 24
+          ? 56
           : safeUrl.includes("sim-overdose")
-            ? 78
-            : 54;
-        const startRow = 300 - rowCount;
+            ? 186
+            : isAdulterated
+              ? 64
+              : 155;
+        const startRow = 302 - rowCount;
         for (let r = 0; r < rowCount; r++) {
           const row = startRow + r;
           const isCavitationHole =
-            safeUrl.includes("sim-cavitation") && r > 15 && r < 28;
-          const widthPx = r < 3 ? 24 : isCavitationHole ? 11 : 28;
-          const startPx = row * frameWidth + 259;
+            safeUrl.includes("sim-cavitation") && r >= 42 && r <= 68;
+          const widthPx = isAdulterated
+            ? r < 8
+              ? 8
+              : 11
+            : r < 3
+              ? 9
+              : isCavitationHole
+                ? 4
+                : 11;
+          const startPx = row * frameWidth + 268;
           runs.push(startPx - cursor, widthPx);
           cursor = startPx + widthPx;
         }
